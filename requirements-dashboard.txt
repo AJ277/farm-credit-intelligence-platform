@@ -1,0 +1,9 @@
+streamlit==1.67.0
+plotly==6.9.0
+pandas==2.3.3
+numpy==2.5.5
+scikit-learn==1.9.1
+mlflow==3.18.0
+pyspark==4.0.1
+delta-spark==4.0.1
+pytest==9.2.0
