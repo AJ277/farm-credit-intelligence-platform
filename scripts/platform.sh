@@ -27,5 +27,14 @@ case "${1:-}" in
     cd "$ROOT/components/usda-data-engineering"
     exec "$ROOT/.venv-usda/bin/python" -m src.pipeline --source real --csv data/raw/usda_state_crop_clean.csv "$@"
     ;;
-  *) echo "Usage: $0 {preflight|finance|documents|usda-check|usda-test|usda-analyze} [arguments]" >&2; exit 2 ;;
+  research)
+    shift
+    if [[ "${FCA_ENABLE_DATABRICKS:-0}" != "1" ]]; then
+      echo "Set FCA_ENABLE_DATABRICKS=1 to run validated Databricks research." >&2
+      exit 2
+    fi
+    cd "$ROOT/components/autonomous-agent"
+    exec "$PYTHON" scripts/run_validated_databricks_agent.py "$@"
+    ;;
+  *) echo "Usage: $0 {preflight|finance|documents|usda-check|usda-test|usda-analyze|research} [arguments]" >&2; exit 2 ;;
 esac
