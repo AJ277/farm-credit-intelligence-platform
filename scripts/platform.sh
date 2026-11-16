@@ -40,5 +40,10 @@ case "${1:-}" in
     shift
     exec python3 "$ROOT/scripts/combined_report.py" "$@"
     ;;
-  *) echo "Usage: $0 {preflight|finance|documents|usda-check|usda-test|usda-analyze|research|combined-report} [arguments]" >&2; exit 2 ;;
+  forecast)
+    shift
+    cd "$ROOT"
+    exec "$ROOT/.venv-usda/bin/python" forecasting/corn_yield_forecast.py "$@"
+    ;;
+  *) echo "Usage: $0 {preflight|finance|documents|usda-check|usda-test|usda-analyze|research|combined-report|forecast} [arguments]" >&2; exit 2 ;;
 esac
