@@ -36,5 +36,9 @@ case "${1:-}" in
     cd "$ROOT/components/autonomous-agent"
     exec "$PYTHON" scripts/run_validated_databricks_agent.py "$@"
     ;;
-  *) echo "Usage: $0 {preflight|finance|documents|usda-check|usda-test|usda-analyze|research} [arguments]" >&2; exit 2 ;;
+  combined-report)
+    shift
+    exec python3 "$ROOT/scripts/combined_report.py" "$@"
+    ;;
+  *) echo "Usage: $0 {preflight|finance|documents|usda-check|usda-test|usda-analyze|research|combined-report} [arguments]" >&2; exit 2 ;;
 esac
