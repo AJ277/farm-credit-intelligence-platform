@@ -1,15 +1,39 @@
 
+"""Generate a combined FCA financial and USDA agricultural research report."""
+
 import csv
-import json
+import math
 import subprocess
+import json
 from pathlib import Path
 
+
 ROOT = Path(__file__).resolve().parents[1]
+
 LAUNCHER = ROOT / "scripts/platform.sh"
-USDA = ROOT / "components/usda-data-engineering/data/raw/usda_state_crop_clean.csv"
+
+USDA = (
+    ROOT
+    / "components"
+    / "usda-data-engineering"
+    / "data"
+    / "raw"
+    / "usda_state_crop_clean.csv"
+)
+
+FORECAST = (
+    ROOT
+    / "output"
+    / "forecasting"
+    / "corn_yield_2026_experimental.csv"
+)
+
+REPORT = ROOT / "output" / "combined_report.md"
 
 
 def get_data(*arguments):
+    """Retrieve JSON data using the unified platform launcher."""
+
     result = subprocess.run(
         [str(LAUNCHER), *arguments],
         cwd=ROOT,
@@ -18,11 +42,147 @@ def get_data(*arguments):
         check=True,
         timeout=120,
     )
+
     return json.loads(result.stdout)
 
 
+def load_usda_yields():
+    """Load actual 2025 corn-yield observations."""
+
+    if not USDA.is_file():
+        raise FileNotFoundError(
+            f"USDA dataset missing: {USDA}"
+        )
+
+    with USDA.open(
+        encoding="utf-8-sig",
+        newline="",
+    ) as file:
+
+        reader = csv.DictReader(file)
+
+        yields = []
+
+        for row in reader:
+
+            if (
+                row["year"] == "2025"
+                and row["commodity_desc"].upper() == "CORN"
+                and row["statisticcat_desc"].upper() == "YIELD"
+                and row["unit_desc"].upper().replace(" ", "")
+                == "BU/ACRE"
+                and row["state_name"].upper() != "OTHER STATES"
+            ):
+
+                yields.append(
+                    (
+                        row["state_name"],
+                        float(row["value"].replace(",", "")),
+                    )
+                )
+
+    if len(yields) != 41:
+        raise ValueError(
+            f"Expected 41 USDA state observations, found {len(yields)}"
+        )
+
+    if len({state for state, _ in yields}) != len(yields):
+        raise ValueError("Duplicate USDA state observations")
+
+    if any(not math.isfinite(value) or value <= 0 for _, value in yields):
+        raise ValueError("Invalid USDA yield observation")
+
+    return yields
+
+
+def load_forecasts(historical_yields):
+    """Load and validate experimental 2026 estimates."""
+
+    if not FORECAST.is_file():
+        raise FileNotFoundError(
+            "Forecast data missing. "
+            "Run ./scripts/platform.sh forecast first."
+        )
+
+    with FORECAST.open(
+        encoding="utf-8-sig",
+        newline="",
+    ) as file:
+
+        forecasts = list(csv.DictReader(file))
+
+    if len(forecasts) != 41:
+        raise ValueError(
+            f"Expected 41 forecasts, found {len(forecasts)}"
+        )
+
+    names = [row["state_name"] for row in forecasts]
+
+    if len(set(names)) != 41:
+        raise ValueError("Duplicate forecast states")
+
+    historical_states = {
+        state for state, _ in historical_yields
+    }
+
+    if set(names) != historical_states:
+        raise ValueError(
+            "Forecast states do not match historical USDA states"
+        )
+
+    result = []
+
+    for row in forecasts:
+
+        value = float(row["forecast_2026"])
+
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError(
+                f"Invalid forecast for {row['state_name']}"
+            )
+
+        result.append(
+            (
+                row["state_name"],
+                value,
+            )
+        )
+
+    return result
+
+
 def main():
-    financial = get_data("finance", "--limit", "5")
+    """Generate the combined research report."""
+
+    # --------------------------------------------------
+    # 1. FCA financial research
+    # --------------------------------------------------
+
+    financial = get_data(
+        "finance",
+        "--limit",
+        "5",
+    )
+
+    if len(financial) != 5:
+        raise ValueError(
+            "Expected five FCA financial records"
+        )
+
+    quarters = {
+        row["quarter"]
+        for row in financial
+    }
+
+    if quarters != {"2026Q3"}:
+        raise ValueError(
+            "Unexpected FCA financial reporting quarter"
+        )
+
+    # --------------------------------------------------
+    # 2. FCA document evidence
+    # --------------------------------------------------
+
     documents = get_data(
         "documents",
         "Farm Credit System funding conditions",
@@ -30,46 +190,34 @@ def main():
         "lexical",
     )
 
-    if len(financial) != 5:
-        raise ValueError("Expected five financial records")
-
-    if not USDA.is_file():
-        raise FileNotFoundError(f"USDA dataset missing: {USDA}")
-
-    with USDA.open(encoding="utf-8-sig", newline="") as file:
-        yields = [
-            (r["state_name"], float(r["value"].replace(",", "")))
-            for r in csv.DictReader(file)
-            if r["year"] == "2025"
-            and r["commodity_desc"].upper() == "CORN"
-            and r["statisticcat_desc"].upper() == "YIELD"
-            and r["unit_desc"].upper().replace(" ", "") == "BU/ACRE"
-            and r["state_name"].upper() != "OTHER STATES"
-        ]
-
-    if len(yields) < 5:
-        raise ValueError("Insufficient USDA yield observations")
-
-    if len({name for name, _ in yields}) != len(yields):
-        raise ValueError("Duplicate state observations")
-
     if not documents:
-        raise ValueError("No FCA document evidence retrieved")
+        raise ValueError(
+            "No FCA document evidence retrieved"
+        )
 
-    quarters = {row["quarter"] for row in financial}
-    if len(quarters) != 1:
-        raise ValueError("Financial records span multiple quarters")
+    # --------------------------------------------------
+    # 3. USDA historical and forecast data
+    # --------------------------------------------------
+
+    yields = load_usda_yields()
+
+    forecasts = load_forecasts(yields)
+
+    # --------------------------------------------------
+    # 4. Report header and financial indicators
+    # --------------------------------------------------
 
     lines = [
         "# Combined Farm Credit and Agricultural Research Report",
         "",
-        f"## FCA Financial Screening — {next(iter(quarters))}",
+        "## FCA Financial Screening — 2026Q3",
         "",
         "| Institution | Nonaccrual / Net Loans |",
         "|---|---:|",
     ]
 
     for row in financial:
+
         lines.append(
             f"| {row['institution_name']} | "
             f"{row['nonaccrual_netloans_pct']:.3f}% |"
@@ -79,44 +227,137 @@ def main():
         "",
         "Source: https://www.fca.gov/bank-oversight/call-report-data-for-download",
         "",
+    ]
+
+    # --------------------------------------------------
+    # 5. Historical USDA agricultural indicators
+    # --------------------------------------------------
+
+    lines += [
         "## USDA Agricultural Indicators — 2025",
         "",
         "| State | Corn Yield (BU/ACRE) |",
         "|---|---:|",
     ]
 
-    for name, value in sorted(yields, key=lambda x: -x[1])[:5]:
-        lines.append(f"| {name} | {value:.2f} |")
+    for state, value in sorted(
+        yields,
+        key=lambda item: item[1],
+        reverse=True,
+    )[:5]:
+
+        lines.append(
+            f"| {state} | {value:.2f} |"
+        )
 
     lines += [
         "",
         "Source: https://quickstats.nass.usda.gov/",
         "",
+    ]
+
+    # --------------------------------------------------
+    # 6. Experimental corn-yield forecasts
+    # --------------------------------------------------
+
+    lines += [
+        "## Experimental 2026 Corn-Yield Estimates",
+        "",
+        "| State | Estimated Yield (BU/ACRE) |",
+        "|---|---:|",
+    ]
+
+    for state, value in sorted(
+        forecasts,
+        key=lambda item: item[1],
+        reverse=True,
+    )[:10]:
+
+        lines.append(
+            f"| {state} | {value:.2f} |"
+        )
+
+    lines += [
+        "",
+        "**Model:** Two-feature Linear Regression using historical lagged yields.",
+        "",
+        "**Development-validation average MAE (2023-2024):** 15.35 BU/ACRE.",
+        "",
+        "**2025 evaluation:** Exploratory; not an untouched final test.",
+        "",
+        "**Forecast horizon:** 2026, based on historical observations through 2025.",
+        "",
+        "**Forecast limitations:** These are experimental estimates, "
+        "not official USDA forecasts.",
+        "",
+        "The model does not incorporate weather conditions, commodity "
+        "prices, soil characteristics, or institution-level lending exposures.",
+        "",
+    ]
+
+    # --------------------------------------------------
+    # 7. FCA documentary evidence
+    # --------------------------------------------------
+
+    lines += [
         "## FCA Document References",
         "",
     ]
 
-    for doc in documents:
-        if doc.get("title") and doc.get("url") and doc.get("page"):
+    for document in documents:
+
+        title = document.get("title")
+        url = document.get("url")
+        page = document.get("page")
+
+        if title and url and page is not None:
+
             lines.append(
-                f"- {doc['title']}, page {doc['page']}: {doc['url']}"
+                f"- {title}, page {page}: {url}"
             )
+
+    # --------------------------------------------------
+    # 8. Interpretation and limitations
+    # --------------------------------------------------
 
     lines += [
         "",
         "## Interpretation and Limitations",
         "",
         "Financial and agricultural indicators come from separate datasets.",
+        "",
         "No institution-specific geographic or commodity exposure is inferred.",
-        "Anomaly screening indicators are not default probabilities.",
-        "This is an independent educational research project.",
+        "",
+        "The agricultural forecasts are experimental model estimates "
+        "and should not be treated as official USDA predictions.",
+        "",
+        "Nonaccrual ratios and statistical anomaly indicators are "
+        "not default probabilities or official credit ratings.",
+        "",
+        "The historical validation sample is limited, and the "
+        "2025 exploratory evaluation is not an untouched final test.",
+        "",
+        "This is an independent educational research project, "
+        "not an official Farm Credit Administration application.",
     ]
 
-    output = ROOT / "output/combined_report.md"
-    output.parent.mkdir(exist_ok=True)
-    output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # --------------------------------------------------
+    # 9. Write report
+    # --------------------------------------------------
 
-    print(f"COMBINED REPORT GENERATED: {output}")
+    REPORT.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    REPORT.write_text(
+        "\n".join(lines) + "\n",
+        encoding="utf-8",
+    )
+
+    print(
+        f"COMBINED REPORT GENERATED: {REPORT}"
+    )
 
 
 if __name__ == "__main__":
