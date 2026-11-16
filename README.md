@@ -6,6 +6,36 @@ This platform integrates Farm Credit Administration (FCA) financial data, USDA a
 
 The objective is to demonstrate practical capabilities in financial analytics, data engineering, statistical modeling, reproducibility, and evidence-based research.
 
+
+## Analytics Dashboard Preview
+
+The Streamlit dashboard integrates financial screening,
+agricultural trends, experimental forecasting, and FCA
+document intelligence into one interactive interface.
+
+### FCA Financial Risk Analytics
+
+![FCA Financial Risk Analytics](docs/screenshots/01-financial-risk.png)
+
+### USDA Agricultural Trends
+
+![USDA Agricultural Trends](docs/screenshots/02-agricultural-trends.png)
+
+### Experimental 2026 Corn-Yield Forecasting
+
+![Experimental Corn-Yield Forecasting](docs/screenshots/03-forecasting.png)
+
+### FCA Document Intelligence
+
+![FCA Document Intelligence](docs/screenshots/04-document-intelligence.png)
+
+All screenshots show the working local research application.
+Forecasts are experimental and are not official USDA predictions.
+
+---
+
+
+
 ## Platform Capabilities
 
 ### 1. FCA Financial Risk Analytics
