@@ -1,6 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Load local configuration without overriding existing environment variables.
+CONFIG_FILE="$ROOT/.env"
+if [[ -f "$CONFIG_FILE" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
+
+    if [[ "$line" =~ ^(FCA_SQLITE_PATH|FCA_DOC_REPO)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      if [[ -z "${!key:-}" ]]; then
+        printf -v "$key" '%s' "$value"
+        export "$key"
+      fi
+    else
+      echo "Invalid or unsupported .env entry" >&2
+      exit 2
+    fi
+  done < "$CONFIG_FILE"
+fi
+
 export FCA_DOC_REPO="${FCA_DOC_REPO:-$HOME/fca-document-intelligence}"
 PYTHON="${FCA_AGENT_PYTHON:-$HOME/fca-autonomous-research-agent/.venv/bin/python}"
 if [[ ! -x "$PYTHON" ]]; then echo "Agent Python environment not found" >&2; exit 1; fi
