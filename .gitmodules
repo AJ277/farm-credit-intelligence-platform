@@ -1,0 +1,12 @@
+[submodule "components/financial-risk"]
+	path = components/financial-risk
+	url = https://github.com/AJ277/farm-credit-financial-risk-analytics.git
+[submodule "components/usda-data-engineering"]
+	path = components/usda-data-engineering
+	url = https://github.com/AJ277/usda-agricultural-data-engineering.git
+[submodule "components/document-intelligence"]
+	path = components/document-intelligence
+	url = https://github.com/AJ277/fca-document-intelligence.git
+[submodule "components/autonomous-agent"]
+	path = components/autonomous-agent
+	url = https://github.com/AJ277/fca-autonomous-research-agent.git
