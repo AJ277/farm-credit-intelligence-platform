@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from dashboard.data import load_forecast_data
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,39 +27,9 @@ USDA_CSV = (
 )
 
 
-def sha256_file(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 @st.cache_data
 def load_data():
-    """Load and verify forecasting outputs."""
-
-    for path in (FORECAST_CSV, METADATA_JSON, USDA_CSV):
-        if not path.is_file():
-            raise FileNotFoundError(f"Required file missing: {path}")
-
-    metadata = json.loads(METADATA_JSON.read_text(encoding="utf-8"))
-
-    if sha256_file(FORECAST_CSV) != metadata["forecast_sha256"]:
-        raise ValueError("Forecast CSV fingerprint mismatch")
-
-    if sha256_file(USDA_CSV) != metadata["source_sha256"]:
-        raise ValueError("USDA source fingerprint mismatch")
-
-    if metadata["forecast_year"] != 2026:
-        raise ValueError("Unexpected forecast year")
-
-    forecast = pd.read_csv(FORECAST_CSV)
-    historical = pd.read_csv(USDA_CSV)
-
-    if len(forecast) != metadata["forecast_states"]:
-        raise ValueError("Forecast row-count mismatch")
-
-    if forecast["state_name"].duplicated().any():
-        raise ValueError("Duplicate forecast states")
-
-    return forecast, historical, metadata
+    return load_forecast_data(FORECAST_CSV, METADATA_JSON, USDA_CSV)
 
 
 st.set_page_config(
