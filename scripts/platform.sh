@@ -17,5 +17,15 @@ case "${1:-}" in
     test -f src/pipeline.py && echo "Spark pipeline: found"
     test -f analyze_usda.py && echo "Analysis script: found"
     ;;
-  *) echo "Usage: $0 {preflight|finance|documents} [arguments]" >&2; exit 2 ;;
+  usda-test)
+    shift
+    cd "$ROOT/components/usda-data-engineering"
+    exec "$ROOT/.venv-usda/bin/python" -m pytest -q "$@"
+    ;;
+  usda-analyze)
+    shift
+    cd "$ROOT/components/usda-data-engineering"
+    exec "$ROOT/.venv-usda/bin/python" -m src.pipeline --source real --csv data/raw/usda_state_crop_clean.csv "$@"
+    ;;
+  *) echo "Usage: $0 {preflight|finance|documents|usda-check|usda-test|usda-analyze} [arguments]" >&2; exit 2 ;;
 esac
