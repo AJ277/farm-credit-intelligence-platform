@@ -203,6 +203,36 @@ def main():
 
     forecasts = load_forecasts(yields)
 
+    # Validate forecast provenance before generating a report.
+    import hashlib
+
+    metadata_path = ROOT / "output/forecasting/forecast_metadata.json"
+    if not metadata_path.is_file():
+        raise FileNotFoundError("Forecast metadata missing. Rerun forecast.")
+
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+
+    if metadata.get("source") != str(USDA.relative_to(ROOT)):
+        raise ValueError("Forecast source path does not match USDA source")
+    if digest(USDA) != metadata.get("source_sha256"):
+        raise ValueError("USDA source fingerprint mismatch")
+    if digest(FORECAST) != metadata.get("forecast_sha256"):
+        raise ValueError("Forecast fingerprint mismatch")
+    if metadata.get("forecast_year") != 2026:
+        raise ValueError("Unexpected forecast year")
+    if metadata.get("forecast_states") != len(forecasts):
+        raise ValueError("Forecast row-count mismatch")
+
+    metrics = metadata.get("validation_metrics", {})
+    if set(metrics) != {"2023", "2024"}:
+        raise ValueError("Missing development validation metrics")
+
+    average_mae = float(metadata["development_average_mae"])
+    actual_average = sum(float(metrics[y]["model_mae"]) for y in ("2023", "2024")) / 2
+    if not math.isfinite(average_mae) or not math.isclose(average_mae, actual_average, rel_tol=1e-9):
+        raise ValueError("Validation MAE metadata mismatch")
+
     # --------------------------------------------------
     # 4. Report header and financial indicators
     # --------------------------------------------------
@@ -281,7 +311,7 @@ def main():
         "",
         "**Model:** Two-feature Linear Regression using historical lagged yields.",
         "",
-        "**Development-validation average MAE (2023-2024):** 15.35 BU/ACRE.",
+        f"**Development-validation average MAE (2023-2024):** {average_mae:.2f} BU/ACRE.",
         "",
         "**2025 evaluation:** Exploratory; not an untouched final test.",
         "",

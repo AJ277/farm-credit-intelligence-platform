@@ -139,6 +139,73 @@ def main():
     path = OUTPUT / "corn_yield_2026_experimental.csv"
     forecast.to_csv(path, index=False)
 
+    path = OUTPUT / "corn_yield_2026_experimental.csv"
+    forecast.to_csv(path, index=False)
+
+    # Record reproducibility and data-lineage metadata.
+    import hashlib
+    import json
+    from datetime import datetime, timezone
+
+    # Paste the remaining metadata code here.
+
+
+
+    # Record reproducibility and data-lineage metadata.
+    import hashlib
+    import json
+    from datetime import datetime, timezone
+
+    def sha256_file(file_path):
+        digest = hashlib.sha256()
+        with file_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    validation = {
+        str(year): {
+            name: float(value)
+            for name, value in evaluate(df, year).items()
+        }
+        for year in (2023, 2024)
+    }
+
+    development_mae = sum(
+        result["model_mae"]
+        for result in validation.values()
+    ) / len(validation)
+
+    metadata = {
+        "model": "LinearRegression",
+        "features": ["lag1", "two_year_average"],
+        "training_data_through": 2025,
+        "forecast_year": 2026,
+        "source": str(SOURCE.relative_to(ROOT)),
+        "source_sha256": sha256_file(SOURCE),
+        "forecast_sha256": sha256_file(path),
+        "feature_eligible_rows": int(len(df)),
+        "forecast_states": int(len(forecast)),
+        "validation_years": [2023, 2024],
+        "validation_metrics": validation,
+        "development_average_mae": development_mae,
+        "evaluation_2025_status": "exploratory_not_untouched",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "limitations": (
+            "Experimental estimates, not official USDA forecasts. "
+            "No independent untouched final test."
+        ),
+    }
+
+    metadata_path = OUTPUT / "forecast_metadata.json"
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2),
+        encoding="utf-8",
+    )
+
+    print(f"Forecast metadata: {metadata_path}")
+
+
     print(f"\n2026 experimental estimates: {len(forecast)} states")
     print(f"Forecast file: {path}")
     print("FORECASTING WORKFLOW PASSED")
